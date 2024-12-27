@@ -11,6 +11,7 @@ request.interceptors.response.use(
   response => {
     const { data } = response
     if (data.code === 200) {
+      console.log('Response data:', data)
       return data.data
     } else {
       ElMessage.error(data.message || '请求失败')
@@ -18,6 +19,7 @@ request.interceptors.response.use(
     }
   },
   error => {
+    console.error('Request error:', error)
     ElMessage.error(error.message || '请求失败')
     return Promise.reject(error)
   }

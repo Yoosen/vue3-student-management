@@ -28,6 +28,8 @@
         border 
         stripe
         :header-cell-style="{ background: '#f5f7fa' }"
+        :default-sort="{ prop: 'classes', order: 'ascending' }"
+        @sort-change="handleSortChange"
       >
         <el-table-column prop="id" label="学号" width="120" />
         <el-table-column prop="name" label="姓名" width="100" />
@@ -41,30 +43,7 @@
           filter-placement="bottom"
           column-key="classes"
           :filter-multiple="false"
-        >
-          <template #filter="{ filters, value, handleFilter }">
-            <div class="filter-content">
-              <el-radio-group v-model="filterValues.classes" class="filter-list">
-                <el-radio 
-                  v-for="item in filters" 
-                  :key="item.value" 
-                  :label="item.value"
-                  class="filter-item"
-                >
-                  {{ item.text }}
-                </el-radio>
-              </el-radio-group>
-              <div class="filter-footer">
-                <el-button type="primary" size="small" @click="handleConfirm('classes', handleFilter)">
-                  确认
-                </el-button>
-                <el-button size="small" @click="handleReset('classes', handleFilter)">
-                  重置
-                </el-button>
-              </div>
-            </div>
-          </template>
-        </el-table-column>
+        />
         <el-table-column 
           prop="major" 
           label="专业"
@@ -73,35 +52,12 @@
           filter-placement="bottom"
           column-key="major"
           :filter-multiple="false"
-        >
-          <template #filter="{ filters, value, handleFilter }">
-            <div class="filter-content">
-              <el-radio-group v-model="filterValues.major" class="filter-list">
-                <el-radio 
-                  v-for="item in filters" 
-                  :key="item.value" 
-                  :label="item.value"
-                  class="filter-item"
-                >
-                  {{ item.text }}
-                </el-radio>
-              </el-radio-group>
-              <div class="filter-footer">
-                <el-button type="primary" size="small" @click="handleConfirm('major', handleFilter)">
-                  确认
-                </el-button>
-                <el-button size="small" @click="handleReset('major', handleFilter)">
-                  重置
-                </el-button>
-              </div>
-            </div>
-          </template>
-        </el-table-column>
+        />
         <el-table-column 
           prop="year" 
           label="入学年份" 
-          width="100"
-          sortable
+          width="120"
+          sortable="custom"
         />
         <el-table-column prop="phone" label="手机号" width="120">
           <template #default="{ row }">
@@ -128,6 +84,20 @@
         </el-table-column>
       </el-table>
 
+      <!-- 在表格下方添加分页 -->
+      <div class="pagination-container">
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 30, 50]"
+          :background="true"
+          layout="total, sizes, prev, pager, next, jumper"
+          :total="totalStudents"
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
+        />
+      </div>
+
       <!-- 添加/编辑学生对话框 -->
       <el-dialog
         :title="dialogTitle"
@@ -147,7 +117,8 @@
             <el-input 
               v-model.number="form.id" 
               :disabled="isEdit"
-              class="form-input" 
+              class="form-input"
+              type="number"
             />
           </el-form-item>
           <el-form-item label="姓名" prop="name">
@@ -172,6 +143,7 @@
               placeholder="选择年份"
               value-format="YYYY"
               :parse-format="yearFormat"
+              :disabled-date="disabledDate"
               class="form-date"
             />
           </el-form-item>
@@ -197,7 +169,7 @@ import { useStudentStore } from '@/store/modules/student'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
-import type { StudentForm } from '@/types/student'
+import type { StudentForm, Student } from '@/types/student'
 
 const router = useRouter()
 const studentStore = useStudentStore()
@@ -240,8 +212,19 @@ const rules = computed(() => {
       ...baseRules,
       id: [
         { required: true, message: '请输入学号', trigger: triggerType },
-        { type: 'number', message: '学号必须为数字', trigger: triggerType },
-        { min: 2000000000, max: 2099999999, message: '请输入正确的学号格式', trigger: triggerType }
+        { 
+          validator: (rule: any, value: any, callback: any) => {
+            const num = Number(value)
+            if (isNaN(num)) {
+              callback(new Error('学号必须为数字'))
+            } else if (num < 2020000000 || num > 2029999999) {
+              callback(new Error('请输入正确的学号格式（202xxxxxxx）'))
+            } else {
+              callback()
+            }
+          },
+          trigger: triggerType 
+        }
       ]
     }
   }
@@ -252,28 +235,68 @@ const rules = computed(() => {
 // 对话框标题
 const dialogTitle = computed(() => isEdit.value ? '编辑学生信息' : '添加学生')
 
-// 过滤后的学生列表
-const filteredStudents = computed(() => {
+// 添加分页相关的响应式变量
+const currentPage = ref(1)
+const pageSize = ref(10)
+
+// 先添加一个处理过滤的计算属性
+const filteredList = computed(() => {
+  let result = [...studentStore.students]
+
+  // 1. 处理搜索关键字过滤
   const keyword = searchKeyword.value.toLowerCase()
-  if (!keyword) return studentStore.students
-  
-  return studentStore.students.filter(student => 
-    student.id.toString().includes(keyword) ||
-    student.name.toLowerCase().includes(keyword) ||
-    student.classes.toLowerCase().includes(keyword) ||
-    student.major.toLowerCase().includes(keyword) ||
-    student.year.toString().includes(keyword)
-  )
+  if (keyword) {
+    result = result.filter(student => 
+      student.id.toString().includes(keyword) ||
+      student.name.toLowerCase().includes(keyword) ||
+      student.classes.toLowerCase().includes(keyword) ||
+      student.major.toLowerCase().includes(keyword) ||
+      student.year.toString().includes(keyword)
+    )
+  }
+
+  // 2. 处理班级和专业的筛选
+  if (filterValues.value.classes) {
+    result = result.filter(student => student.classes === filterValues.value.classes)
+  }
+  if (filterValues.value.major) {
+    result = result.filter(student => student.major === filterValues.value.major)
+  }
+
+  return result
 })
 
-const handleSearch = (): void => {
-  // 搜索已经通过计算属性实现
+// 修改表格数据的计算属性，只负责分页
+const filteredStudents = computed(() => {
+  const startIndex = (currentPage.value - 1) * pageSize.value
+  const endIndex = startIndex + pageSize.value
+  return filteredList.value.slice(startIndex, endIndex)
+})
+
+// 修改总条数的计算属性，使用筛选后的数据长度
+const totalStudents = computed(() => filteredList.value.length)
+
+// 处理每页条数变化
+const handleSizeChange = (val: number) => {
+  pageSize.value = val
+  currentPage.value = 1 // 重置到第一页
+}
+
+// 处理页码变化
+const handleCurrentChange = (newPage: number) => {
+  currentPage.value = newPage
+}
+
+// 修改搜索处理函数
+const handleSearch = () => {
+  currentPage.value = 1 // 搜索时重置到第一页
 }
 
 // 添加学生
 const handleAdd = () => {
   isEdit.value = false
   dialogVisible.value = true
+  const currentYear = new Date().getFullYear()
   // 延迟重置表单，确保对话框显示后再重置
   nextTick(() => {
     if (formRef.value) {
@@ -286,7 +309,7 @@ const handleAdd = () => {
       sex: '男',
       classes: '',
       major: '',
-      year: new Date().getFullYear(),
+      year: currentYear.toString(), // 设置为当前年份
       phone: null
     }
   })
@@ -302,7 +325,11 @@ const handleEdit = (student: Student) => {
       formRef.value.resetFields()
       formRef.value.clearValidate()
     }
-    form.value = { ...student }
+    // 复制学生数据并确保年份格式正确
+    form.value = {
+      ...student,
+      year: student.year.toString() // 确保年份是字符串格式
+    }
   })
 }
 
@@ -310,7 +337,8 @@ const handleEdit = (student: Student) => {
 const handleSubmit = async () => {
   if (!formRef.value) return
   
-  await formRef.value.validate(async (valid) => {
+  try {
+    const valid = await formRef.value.validate()
     if (valid) {
       const success = isEdit.value 
         ? await studentStore.updateStudent(form.value.id!, form.value)
@@ -320,9 +348,18 @@ const handleSubmit = async () => {
         ElMessage.success(isEdit.value ? '更新成功' : '添加成功')
         dialogVisible.value = false
         await studentStore.fetchStudents()
+        
+        // 计算新增数据应该在哪一页
+        const totalPages = Math.ceil(studentStore.students.length / pageSize.value)
+        currentPage.value = totalPages // 跳转到最后一页
+      } else {
+        ElMessage.error(isEdit.value ? '更新失败' : '添加失败')
       }
     }
-  })
+  } catch (error) {
+    console.error('Submit error:', error)
+    ElMessage.error('操作失败，请重试')
+  }
 }
 
 // 关闭对话框时重置表单和验证状态
@@ -357,36 +394,34 @@ const handleDelete = async (id: number) => {
         type: 'warning',
       }
     )
-    await studentStore.deleteStudent(id)
+    const success = await studentStore.deleteStudent(id)
+    if (success) {
+      // 如果当前页没有数据了，则跳转到上一页
+      if (filteredStudents.value.length === 1 && currentPage.value > 1) {
+        currentPage.value--
+      }
+    }
   } catch (error) {
     // 用户取消删除或删除失败
   }
 }
 
-const yearFormat = (val: string) => Number(val)
+// 修改年份格式化函数
+const yearFormat = (val: string | number) => {
+  return typeof val === 'string' ? Number(val) : val
+}
 
 // 获取班级筛选选项
 const classesFilters = computed(() => {
-  const classesSet = new Set(studentStore.students.map(student => student.classes))
-  return Array.from(classesSet).map(classes => ({
-    text: classes,
-    value: classes
-  }))
+  const uniqueClasses = [...new Set(studentStore.students.map(item => item.classes))]
+  return uniqueClasses.map(classes => ({ text: classes, value: classes }))
 })
 
 // 获取专业筛选选项
 const majorFilters = computed(() => {
-  const majorSet = new Set(studentStore.students.map(student => student.major))
-  return Array.from(majorSet).map(major => ({
-    text: major,
-    value: major
-  }))
+  const uniqueMajors = [...new Set(studentStore.students.map(item => item.major))]
+  return uniqueMajors.map(major => ({ text: major, value: major }))
 })
-
-// 筛选方法
-const filterHandler = (value: string, row: Student, column: { property: keyof Student }) => {
-  return row[column.property] === value
-}
 
 // 添加筛选值状态
 const filterValues = ref({
@@ -394,19 +429,62 @@ const filterValues = ref({
   major: ''
 })
 
-// 确认筛选
-const handleConfirm = (type: 'classes' | 'major', handleFilter: (value: string) => void) => {
-  handleFilter(filterValues.value[type])
+// 修改筛选方法
+const filterHandler = (value: string, row: Student, column: { property: keyof Student }) => {
+  const type = column.property === 'classes' ? 'classes' : 'major'
+  filterValues.value[type] = value
+  // 如果值为空字符串，表示选择了"全部"
+  return !value || row[column.property] === value
 }
 
-// 重置筛选
+// 修改筛选重置处理函数
 const handleReset = (type: 'classes' | 'major', handleFilter: (value: string) => void) => {
   filterValues.value[type] = ''
   handleFilter('')
+  currentPage.value = 1
 }
 
-onMounted(() => {
-  studentStore.fetchStudents()
+// 修改筛选确认处理函数
+const handleConfirm = (type: 'classes' | 'major', handleFilter: (value: string) => void) => {
+  handleFilter(filterValues.value[type])
+  currentPage.value = 1
+}
+
+// 添加排序处理函数
+const handleSortChange = ({ prop, order }: { prop: keyof Student, order: 'ascending' | 'descending' | null }) => {
+  if (!prop || !order) return
+
+  studentStore.students.sort((a, b) => {
+    const valueA = a[prop] ?? '';
+    const valueB = b[prop] ?? '';
+    
+    // 首先按指定字段排序
+    if (valueA !== valueB) {
+      return order === 'ascending' 
+        ? String(valueA).localeCompare(String(valueB), 'zh-CN')
+        : String(valueB).localeCompare(String(valueA), 'zh-CN')
+    }
+    
+    // 如果指定字段相同，按学号排序
+    if (a.id !== b.id) {
+      return a.id - b.id;
+    }
+    
+    // 如果学号也相同，按姓名拼音排序
+    return a.name.localeCompare(b.name, 'zh-CN')
+  })
+}
+
+// 添加年份限制函数
+const disabledDate = (time: Date) => {
+  const year = time.getFullYear()
+  return year < 2000 || year > 2099 // 限制年份范围
+}
+
+onMounted(async () => {
+  await studentStore.fetchStudents()
+  // 初始��默认排序
+  handleSortChange({ prop: 'classes', order: 'ascending' })
 })
 </script>
 
@@ -509,5 +587,12 @@ onMounted(() => {
   border: 1px solid var(--el-border-color-lighter);
   border-radius: var(--el-border-radius-base);
   box-shadow: var(--el-box-shadow-light);
+}
+
+.pagination-container {
+  margin-top: 1.25rem;
+  padding: 0.625rem;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>

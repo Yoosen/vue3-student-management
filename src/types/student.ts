@@ -4,7 +4,7 @@ export interface Student {
   sex: '男' | '女';  // 性别
   classes: string;   // 班级
   major: string;     // 专业
-  year: number;      // 入学年份
+  year: string | number;  // 修改这里，允许字符串或数字
   phone: string | null; // 手机号
 }
 
@@ -15,6 +15,6 @@ export interface StudentForm {
   sex: '男' | '女';
   classes: string;
   major: string;
-  year: number;
+  year: string | number;
   phone: string | null;
 }

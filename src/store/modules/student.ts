@@ -38,16 +38,16 @@ export const useStudentStore = defineStore('student', {
       }
     },
 
-    async createStudent(studentData: StudentForm): Promise<boolean> {
+    async createStudent(student: StudentForm): Promise<boolean> {
       try {
-        const success = await studentApi.createStudent(studentData)
-        if (success) {
-          ElMessage.success('创建成功')
+        const result = await studentApi.createStudent(student)
+        if (result) {
           await this.fetchStudents()
+          return true
         }
-        return success
+        return false
       } catch (error) {
-        console.error('创建学生失败:', error)
+        console.error('Create student error:', error)
         return false
       }
     },

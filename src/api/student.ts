@@ -19,7 +19,7 @@ export const studentApi = {
 
   // 创建学生
   createStudent(data: StudentForm) {
-    return request.post<any, boolean>('/admin/student', data)
+    return request.post<any, boolean>('/admin/student/add', data)
   },
 
   // 删除学生
