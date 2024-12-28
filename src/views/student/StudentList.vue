@@ -22,6 +22,36 @@
         </el-form-item>
       </el-form>
 
+      <!-- 筛选区域 -->
+      <div class="filter-container">
+        <div class="filter-group">
+          <span>班级:</span>
+          <el-link
+            v-for="classes in ['全部', ...uniqueClasses]"
+            :key="classes"
+            :underline="false"
+            :type="filterValues.classes === classes ? 'primary' : 'default'"
+            @click="handleClassFilter(classes)"
+            :class="{ 'selected-filter': filterValues.classes === classes }"
+          >
+            {{ classes }}
+          </el-link>
+        </div>
+        <div class="filter-group">
+          <span>专业:</span>
+          <el-link
+            v-for="major in ['全部', ...uniqueMajors]"
+            :key="major"
+            :underline="false"
+            :type="filterValues.major === major ? 'primary' : 'default'"
+            @click="handleMajorFilter(major)"
+            :class="{ 'selected-filter': filterValues.major === major }"
+          >
+            {{ major }}
+          </el-link>
+        </div>
+      </div>
+
       <!-- 学生列表表格 -->
       <el-table 
         :data="filteredStudents" 
@@ -34,31 +64,9 @@
         <el-table-column prop="id" label="学号" width="120" />
         <el-table-column prop="name" label="姓名" width="100" />
         <el-table-column prop="sex" label="性别" width="80" />
-        <el-table-column 
-          prop="classes" 
-          label="班级" 
-          width="100"
-          :filters="classesFilters"
-          :filter-method="filterHandler"
-          filter-placement="bottom"
-          column-key="classes"
-          :filter-multiple="false"
-        />
-        <el-table-column 
-          prop="major" 
-          label="专业"
-          :filters="majorFilters"
-          :filter-method="filterHandler"
-          filter-placement="bottom"
-          column-key="major"
-          :filter-multiple="false"
-        />
-        <el-table-column 
-          prop="year" 
-          label="入学年份" 
-          width="120"
-          sortable="custom"
-        />
+        <el-table-column prop="classes" label="班级" width="100" />
+        <el-table-column prop="major" label="专业" />
+        <el-table-column prop="year" label="入学年份" width="120" sortable="custom" />
         <el-table-column prop="phone" label="手机号" width="120">
           <template #default="{ row }">
             {{ row.phone || '-' }}
@@ -66,20 +74,8 @@
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
-            <el-button 
-              type="primary" 
-              link
-              @click="handleEdit(row)"
-            >
-              编辑
-            </el-button>
-            <el-button 
-              type="danger" 
-              link
-              @click="handleDelete(row.id)"
-            >
-              删除
-            </el-button>
+            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
+            <el-button type="danger" link @click="handleDelete(row.id)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -201,7 +197,6 @@ const rules = computed(() => {
     major: [{ required: true, message: '请输入专业', trigger: triggerType }],
     year: [{ required: true, message: '请选择入学年份', trigger: 'change' }],
     phone: [
-      { required: true, message: '请输入手机号', trigger: triggerType },
       { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: triggerType }
     ]
   }
@@ -239,11 +234,12 @@ const dialogTitle = computed(() => isEdit.value ? '编辑学生信息' : '添加
 const currentPage = ref(1)
 const pageSize = ref(10)
 
-// 先添加一个处理过滤的计算属性
+// 先添加一个处理滤的计算属性
 const filteredList = computed(() => {
+  console.log('算 filteredList')
   let result = [...studentStore.students]
 
-  // 1. 处理搜索关键字过滤
+  // 处理搜索关键字过滤
   const keyword = searchKeyword.value.toLowerCase()
   if (keyword) {
     result = result.filter(student => 
@@ -255,11 +251,11 @@ const filteredList = computed(() => {
     )
   }
 
-  // 2. 处理班级和专业的筛选
-  if (filterValues.value.classes) {
+  // 处理班级和专业的筛选
+  if (filterValues.value.classes && filterValues.value.classes !== '全部') {
     result = result.filter(student => student.classes === filterValues.value.classes)
   }
-  if (filterValues.value.major) {
+  if (filterValues.value.major && filterValues.value.major !== '全部') {
     result = result.filter(student => student.major === filterValues.value.major)
   }
 
@@ -328,7 +324,7 @@ const handleEdit = (student: Student) => {
     // 复制学生数据并确保年份格式正确
     form.value = {
       ...student,
-      year: student.year.toString() // 确保年份是字符串格式
+      year: student.year.toString() // 确保年份是字串格式
     }
   })
 }
@@ -351,7 +347,7 @@ const handleSubmit = async () => {
         
         // 计算新增数据应该在哪一页
         const totalPages = Math.ceil(studentStore.students.length / pageSize.value)
-        currentPage.value = totalPages // 跳转到最后一页
+        currentPage.value = totalPages // 转到最后一页
       } else {
         ElMessage.error(isEdit.value ? '更新失败' : '添加失败')
       }
@@ -412,52 +408,31 @@ const yearFormat = (val: string | number) => {
 }
 
 // 获取班级筛选选项
-const classesFilters = computed(() => {
-  const uniqueClasses = [...new Set(studentStore.students.map(item => item.classes))]
-  return [
-    { text: '全部', value: '' }, // 自定义的"全部"选项
-    ...uniqueClasses.map(classes => ({ text: classes, value: classes }))
-  ]
+const uniqueClasses = computed(() => {
+  return [...new Set(studentStore.students.map(item => item.classes))]
 })
 
 // 获取专业筛选选项
-const majorFilters = computed(() => {
-  const uniqueMajors = [...new Set(studentStore.students.map(item => item.major))]
-  return [
-    { text: '全部', value: '' }, // 自定义的"全部"选项
-    ...uniqueMajors.map(major => ({ text: major, value: major }))
-  ]
+const uniqueMajors = computed(() => {
+  return [...new Set(studentStore.students.map(item => item.major))]
 })
 
 // 添加筛选值状态
 const filterValues = ref({
-  classes: '',
-  major: ''
+  classes: '全部',
+  major: '全部'
 })
 
-// 修改筛选方法
-const filterHandler = (value: string, row: Student, column: { property: keyof Student }) => {
-  const type = column.property === 'classes' ? 'classes' : 'major'
-  filterValues.value[type] = value
-
-  // 打印当前筛选的值和类型
-  console.log(`筛选类型: ${type}, 筛选值: ${value}`)
-
-  // 如果值为空字符串，表示选择了"全部"
-  return !value || row[column.property] === value
+// 处理班级筛选
+const handleClassFilter = (classes: string) => {
+  filterValues.value.classes = classes
+  currentPage.value = 1 // 筛选时重置到第一页
 }
 
-// 修改筛选重置处理函数
-const handleReset = (type: 'classes' | 'major', handleFilter: (value: string) => void) => {
-  filterValues.value[type] = ''
-  handleFilter('')
-  currentPage.value = 1
-}
-
-// 修改筛选确认处理函数
-const handleConfirm = (type: 'classes' | 'major', handleFilter: (value: string) => void) => {
-  handleFilter(filterValues.value[type])
-  currentPage.value = 1
+// 处理专业筛选
+const handleMajorFilter = (major: string) => {
+  filterValues.value.major = major
+  currentPage.value = 1 // 筛选时重置到第一页
 }
 
 // 添加排序处理函数
@@ -514,6 +489,44 @@ onMounted(async () => {
   margin-right: 1.25rem;
 }
 
+.filter-container {
+  margin-bottom: 1.25rem;
+}
+
+.filter-group {
+  margin-bottom: 0.5rem;
+}
+
+.filter-group span {
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.el-link {
+  margin-left: 1rem;
+  margin-right: 1rem;
+  color: #606266;
+  font-size: 1.15rem;
+  font-weight: normal;
+  cursor: pointer;
+  transition: color 0.3s, background-color 0.3s;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.el-link[type="primary"] {
+  font-weight: bold;
+  color: #409eff;
+}
+
+.el-link:hover {
+  color: #409eff;
+}
+
+.selected-filter {
+  background-color: #e6f7ff; /* 红色背景 */
+}
+
 .student-form {
   padding: 1.25rem;
 }
@@ -560,47 +573,8 @@ onMounted(async () => {
   color: var(--el-text-color-secondary);
 }
 
-/* 筛选面板样式 */
-.filter-content {
-  padding: 0.625rem;
-}
-
-.filter-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-  max-height: 15rem;
-  overflow-y: auto;
-}
-
-.filter-item {
-  margin: 0;
-  padding: 0.25rem 0;
-}
-
-.filter-footer {
-  display: flex;
-  justify-content: space-between;
-  padding-top: 0.625rem;
-  border-top: 1px solid var(--el-border-color-lighter);
-}
-
-/* 自定义表格筛选图标样式 */
-:deep(.el-table__column-filter-trigger) {
-  margin-left: 0.5rem;
-}
-
-/* 自定义筛选面板样式 */
-:deep(.el-table-filter) {
-  background-color: var(--el-bg-color);
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: var(--el-border-radius-base);
-  box-shadow: var(--el-box-shadow-light);
-}
-
 .pagination-container {
-  margin-top: 1.25rem;
+  margin-top: 2rem;
   padding: 0.625rem;
   display: flex;
   justify-content: flex-end;
