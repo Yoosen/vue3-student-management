@@ -414,13 +414,19 @@ const yearFormat = (val: string | number) => {
 // 获取班级筛选选项
 const classesFilters = computed(() => {
   const uniqueClasses = [...new Set(studentStore.students.map(item => item.classes))]
-  return uniqueClasses.map(classes => ({ text: classes, value: classes }))
+  return [
+    { text: '全部', value: '' }, // 自定义的"全部"选项
+    ...uniqueClasses.map(classes => ({ text: classes, value: classes }))
+  ]
 })
 
 // 获取专业筛选选项
 const majorFilters = computed(() => {
   const uniqueMajors = [...new Set(studentStore.students.map(item => item.major))]
-  return uniqueMajors.map(major => ({ text: major, value: major }))
+  return [
+    { text: '全部', value: '' }, // 自定义的"全部"选项
+    ...uniqueMajors.map(major => ({ text: major, value: major }))
+  ]
 })
 
 // 添加筛选值状态
@@ -433,6 +439,10 @@ const filterValues = ref({
 const filterHandler = (value: string, row: Student, column: { property: keyof Student }) => {
   const type = column.property === 'classes' ? 'classes' : 'major'
   filterValues.value[type] = value
+
+  // 打印当前筛选的值和类型
+  console.log(`筛选类型: ${type}, 筛选值: ${value}`)
+
   // 如果值为空字符串，表示选择了"全部"
   return !value || row[column.property] === value
 }
@@ -483,7 +493,7 @@ const disabledDate = (time: Date) => {
 
 onMounted(async () => {
   await studentStore.fetchStudents()
-  // 初始��默认排序
+  // 初始默认排序
   handleSortChange({ prop: 'classes', order: 'ascending' })
 })
 </script>
