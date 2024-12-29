@@ -212,8 +212,8 @@ const rules = computed(() => {
             const num = Number(value)
             if (isNaN(num)) {
               callback(new Error('学号必须为数字'))
-            } else if (num < 2020000000 || num > 2029999999) {
-              callback(new Error('请输入正确的学号格式（202xxxxxxx）'))
+            } else if (num < 2000000000 || num > 2099999999) {
+              callback(new Error('请输入正确的学号格式（20xxxxxxxx）'))
             } else {
               callback()
             }
@@ -236,13 +236,12 @@ const pageSize = ref(10)
 
 // 先添加一个处理滤的计算属性
 const filteredList = computed(() => {
-  console.log('算 filteredList')
   let result = [...studentStore.students]
 
   // 处理搜索关键字过滤
   const keyword = searchKeyword.value.toLowerCase()
   if (keyword) {
-    result = result.filter(student => 
+    result = result.filter((student: Student) => 
       student.id.toString().includes(keyword) ||
       student.name.toLowerCase().includes(keyword) ||
       student.classes.toLowerCase().includes(keyword) ||
@@ -253,10 +252,10 @@ const filteredList = computed(() => {
 
   // 处理班级和专业的筛选
   if (filterValues.value.classes && filterValues.value.classes !== '全部') {
-    result = result.filter(student => student.classes === filterValues.value.classes)
+    result = result.filter((student: Student) => student.classes === filterValues.value.classes)
   }
   if (filterValues.value.major && filterValues.value.major !== '全部') {
-    result = result.filter(student => student.major === filterValues.value.major)
+    result = result.filter((student: Student) => student.major === filterValues.value.major)
   }
 
   return result
@@ -266,7 +265,9 @@ const filteredList = computed(() => {
 const filteredStudents = computed(() => {
   const startIndex = (currentPage.value - 1) * pageSize.value
   const endIndex = startIndex + pageSize.value
-  return filteredList.value.slice(startIndex, endIndex)
+  const students = filteredList.value.slice(startIndex, endIndex)
+  console.log('Filtered Students:', students)
+  return students
 })
 
 // 修改总条数的计算属性，使用筛选后的数据长度
@@ -391,6 +392,8 @@ const handleDelete = async (id: number) => {
       }
     )
     const success = await studentStore.deleteStudent(id)
+    console.log('id', id);
+    
     if (success) {
       // 如果当前页没有数据了，则跳转到上一页
       if (filteredStudents.value.length === 1 && currentPage.value > 1) {
@@ -409,12 +412,12 @@ const yearFormat = (val: string | number) => {
 
 // 获取班级筛选选项
 const uniqueClasses = computed(() => {
-  return [...new Set(studentStore.students.map(item => item.classes))]
+  return [...new Set(studentStore.students.map((item: Student) => item.classes))]
 })
 
 // 获取专业筛选选项
 const uniqueMajors = computed(() => {
-  return [...new Set(studentStore.students.map(item => item.major))]
+  return [...new Set(studentStore.students.map((item: Student) => item.major))]
 })
 
 // 添加筛选值状态
@@ -439,7 +442,7 @@ const handleMajorFilter = (major: string) => {
 const handleSortChange = ({ prop, order }: { prop: keyof Student, order: 'ascending' | 'descending' | null }) => {
   if (!prop || !order) return
 
-  studentStore.students.sort((a, b) => {
+  studentStore.students.sort((a: Student, b: Student) => {
     const valueA = a[prop] ?? '';
     const valueB = b[prop] ?? '';
     
@@ -450,7 +453,7 @@ const handleSortChange = ({ prop, order }: { prop: keyof Student, order: 'ascend
         : String(valueB).localeCompare(String(valueA), 'zh-CN')
     }
     
-    // 如果指定字段相同，按学号排序
+    // 如果指字段相同，按学号排序
     if (a.id !== b.id) {
       return a.id - b.id;
     }
